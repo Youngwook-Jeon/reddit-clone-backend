@@ -27,7 +27,7 @@ public class SubredditService {
     }
 
     public List<SubredditDto> getAll() {
-        return subredditRepository.findAll()
+        return subredditRepository.findAllWithPosts()
                 .stream()
                 .map(subredditMapper::mapSubredditToDto)
                 .collect(Collectors.toList());

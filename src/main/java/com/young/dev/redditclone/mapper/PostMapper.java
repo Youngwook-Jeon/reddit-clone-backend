@@ -1,15 +1,32 @@
 package com.young.dev.redditclone.mapper;
 
+import com.github.marlonlom.utilities.timeago.TimeAgo;
 import com.young.dev.redditclone.dto.PostRequest;
 import com.young.dev.redditclone.dto.PostResponse;
-import com.young.dev.redditclone.model.Post;
-import com.young.dev.redditclone.model.Subreddit;
-import com.young.dev.redditclone.model.User;
+import com.young.dev.redditclone.model.*;
+import com.young.dev.redditclone.repository.CommentRepository;
+import com.young.dev.redditclone.repository.VoteRepository;
+import com.young.dev.redditclone.service.AuthService;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import java.util.Optional;
+
+import static com.young.dev.redditclone.model.VoteType.DOWNVOTE;
+import static com.young.dev.redditclone.model.VoteType.UPVOTE;
 
 @Mapper(componentModel = "spring")
 public abstract class PostMapper {
+
+    @Autowired
+    private CommentRepository commentRepository;
+
+    @Autowired
+    private VoteRepository voteRepository;
+
+    @Autowired
+    private AuthService authService;
 
     @Mapping(target = "createdDate", expression = "java(java.time.Instant.now())")
     @Mapping(target = "description", source = "postRequest.description")
@@ -21,5 +38,38 @@ public abstract class PostMapper {
     @Mapping(target = "id", source = "postId")
     @Mapping(target = "subredditName", source = "subreddit.name")
     @Mapping(target = "userName", source = "user.username")
+    @Mapping(target = "commentCount", expression = "java(commentCount(post))")
+    @Mapping(target = "duration", expression = "java(getDuration(post))")
+    @Mapping(target = "upVote", expression = "java(isPostUpVoted(post))")
+    @Mapping(target = "downVote", expression = "java(isPostDownVoted(post))")
     public abstract PostResponse mapToDto(Post post);
+
+    Integer commentCount(Post post) {
+        return commentRepository.findByPost(post).size();
+    }
+
+    String getDuration(Post post) {
+        return TimeAgo.using(post.getCreatedDate().toEpochMilli());
+    }
+
+    boolean isPostUpVoted(Post post) {
+        return checkVoteType(post, UPVOTE);
+    }
+
+    boolean isPostDownVoted(Post post) {
+        return checkVoteType(post, DOWNVOTE);
+    }
+
+    private boolean checkVoteType(Post post, VoteType voteType) {
+        if (authService.isLoggedIn()) {
+            Optional<Vote> voteForPostByUser =
+                    voteRepository.findTopByPostAndUserOrderByVoteIdDesc(
+                            post,
+                            authService.getCurrentUser()
+                    );
+            return voteForPostByUser.filter(vote -> vote.getVoteType().equals(voteType))
+                    .isPresent();
+        }
+        return false;
+    }
 }
